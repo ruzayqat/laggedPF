@@ -1440,6 +1440,7 @@ if save_to_files:
     np.savetxt(string, y, fmt='%f')
 
 xx, yy = np.meshgrid(x, y)  # needed for plotting (global)
+#----------
 del x
 del y
 gc.collect()
