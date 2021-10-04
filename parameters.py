@@ -2,17 +2,22 @@
 import numpy as np
 import yaml
 
+
 def _generate_matrix(params):
     if not params["C_is_eye"]:
         c_mat = np.zeros((params["dimo"], params["dimx"]))
         col_h = 0
-        col_v = params["dim2"]
-        for row in range(params["dimo"]):
-            if row < params["no_h"]:
-                c_mat[row, col_h] = 1
+        col_u = params["dim2"]
+        col_v = 2 * params["dim2"]
+        for i in range(params["dimo"]):
+            if i < params["no_h"]:
+                c_mat[i,col_h] = 1
                 col_h += params["h_freq"]
+            elif params["no_h"] <= i < params["no_u"]:
+                c_mat[i,col_u] = 1
+                col_u += params["v_freq"]
             else:
-                c_mat[row, col_v] = 1
+                c_mat[i,col_v] = 1
                 col_v += params["v_freq"]
     return c_mat
 
@@ -21,21 +26,22 @@ def get_params(input_file):
     print("Loading parameters from %s..." %input_file)
     with open(input_file, "r") as fin:
         params = yaml.safe_load(fin)
-
-    params["dim"] = params["d"]
+    params["N"] = int(params["N"])
+    params["M"] = int(params["M"])
+    params["dim"] = params["d"] + 2
     params["dim2"] = params["dim"] ** 2
     params["dimx"] = 3 * params["dim2"]
     params["no_h"] = (params["dim"] // params["h_freq"]) ** 2
-    params["no_v"] = 2 * (params["dim"] // params["v_freq"]) ** 2
-    params["dimo"] = params["no_h"] + params["no_v"]
+    params["no_u"] = (params["dim"] // params["v_freq"]) ** 2
+    params["no_v"] = params["no_u"]
+    params["dimo"] = params["no_h"] + params["no_u"] + params["no_v"]
     params["dx"] = (2 - 0) / (params["d"] - 1)
     params["ESS_threshold"] = params["N"] * params["ESS_t"]
     params["half_g"] = 0.5 * params["g"]
     params["sig"] = params["sig"] ** 2 / params["dimx"] * np.eye(params["dimx"])
-
     params["C"] = _generate_matrix(params)
     params["Idx"] = np.eye(params["dimx"])
-    params["Ido"] = np.eye(params["dimo"])
+
     if params["X_CoefMatrix_is_eye"]:
         params["ldet_R1"] = 2 * params["dimx"] * np.log(params["sig_x"])
     else:
