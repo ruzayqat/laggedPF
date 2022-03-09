@@ -1,7 +1,7 @@
 """Parameter module"""
 import numpy as np
 import yaml
-
+import os
 
 def _generate_matrix(params):
     if not params["C_is_eye"]:
@@ -38,7 +38,8 @@ def get_params(input_file):
     params["dx"] = (2 - 0) / (params["d"] - 1)
     params["ESS_threshold"] = params["N"] * params["ESS_t"]
     params["half_g"] = 0.5 * params["g"]
-    params["sig"] = params["sig"] ** 2 / params["dimx"] * np.eye(params["dimx"])
+    #params["sig"] = params["sig"] ** 2 / params["dimx"] * np.eye(params["dimx"])
+    params["sig"] = params["sig"] ** 2 / params["dimx"] 
     params["C"] = _generate_matrix(params)
     params["Idx"] = np.eye(params["dimx"])
 
@@ -58,4 +59,16 @@ def get_params(input_file):
     params["R1_sqrt"] = params["sig_x"] * params["Idx"]
     params["R1"] = params["sig_x"] ** 2 * params["Idx"]
     params["log_det_R1"] = 2 * params["dimx"] * np.log(params["sig_x"])
+    
+    # dir_ = os.path.dirname(params["data_file"])
+    # os.makedirs(dir_, exist_ok=True)
+
+    # params["lag_pf_dir"] = dir
+    # params["data_file"] = params["data_file"]
+
+    # dir_ = os.path.dirname(params["mcmc_log_dir"])
+    # os.makedirs(dir_, exist_ok=True)
+
+    # params["mcmc_log_dir"] = params["mcmc_log_dir"]
+
     return params

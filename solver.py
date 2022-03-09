@@ -24,7 +24,6 @@ class ShallowWaterSolver():
         """Set previous solution"""
         dim = self.dim
         dim2 = dim*dim
-
         for i in range(3):
             self.solution[i, 1:-1, 1:-1] = sol_prev[i*dim2:(i+1)*dim2].reshape(dim, dim)
             self.solution[i, 0, :] = self.solution[i, 1, :]

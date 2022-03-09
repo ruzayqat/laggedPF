@@ -21,8 +21,14 @@ def sample_from_f(num, num_part, noised, t_simul, params):
         noised = np.transpose([fx0] * num)
     else:
         fx0 = []
-    noise = mvnrnd(np.zeros((params["dimx"])), params["Idx"], coln=num)  # size = dx x N
-    noised = noised + params["sig_x"] * noise
+    if params["X_CoefMatrix_is_eye"]:
+        noise = np.random.normal(size=(params["dimx"], num))  # size = dimx x num
+        noised = noised + params["sig_x"] * noise
+    else:
+        raise NotImplementedError("Only X_CoefMatrix_is_eye is supported")
+        # need to provide R1_sqrt & R1 = mat_mul(R1_sqrt, R1_sqrt) & ldet_R1
+        #noise = np.random.normal(size=(params["dimx"], num))  # size = dimx x num
+        #noised = noised + mat_mul(R1_sqrt, noise)
     return t_simul, noised, fx0
 
 
@@ -59,17 +65,25 @@ def generate_data(params, x_star):
         tstep, x_pertur = solve(1, x_pertur, params)
         dump_data(params, x_pertur, step+1, "x_pertur")
         t_obs += tstep
-        noise_x = mvnrnd(np.zeros((params["dimx"])), params["Idx"])
-        x_pertur = x_pertur + params["sig_x"] * noise_x
-        noise_o = mvnrnd(np.zeros((params["dimo"])), np.eye(params["dimo"]))
+        noise_x = np.random.normal(size=(params["dimx"]))
+        if params["X_CoefMatrix_is_eye"]:
+            x_pertur = x_pertur + params["sig_x"] * noise_x
+        else:
+            raise NotImplementedError("Only X_CoefMatrix_is_eye is supported")
+            #x_pertur = x_pertur + mat_mul(R1_sqrt, noise_x)
+        noise_o = np.random.normal(size=(params["dimo"]))
         data = mat_mul(params["C"], x_pertur)
-        data += params["sig_y"] * noise_o
+        if params["Y_CoefMatrix_is_eye"]:
+            data += params["sig_y"] * noise_o
+        else:
+            raise NotImplementedError("Only Y_CoefMatrix_is_eye is supported")
+            #data += mat_mul(R2_sqrt, noise_o)
         dump_data(params, data, step, "data")
     return signal, data
 
 def dump_data(params, array, step, name):
     """Dumping array step"""
-    # print('Dumping to %s\n' %params["data_file"])
+    #print('Dumping to %s\n' %params["data_file"])
     dir_ = os.path.dirname(params["data_file"])
     os.makedirs(dir_, exist_ok=True)
     grp_name = "step_%08d" %step

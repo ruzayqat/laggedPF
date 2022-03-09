@@ -9,13 +9,14 @@ from data_tools import sample_from_f, get_predictor_stats, get_data
 from tools import (mat_mul, fwd_slash, bisection, logdet)
 from solver import solve
 
-def _iterline(isim, stage, step, kappa, timestart):
+def _iterline(params, isim, stage, step, kappa, timestart):
     elapsed = time.time()-timestart
     msg = '\t [LPF-%d] isim = %05d, p(%05d) = %05d elapsed = %14.8es\n'
     msg = msg % (stage, isim, step, kappa, elapsed)
-    filename = "lpf_%08d.log" %isim
+    print(msg)
+    filename = "%s/lpf_%08d.log" %(params["lagged_dir"], isim)
     with open(filename, "a") as fout:
-        fout.write(msg)
+       fout.write(msg)
 
 def calc_ess(weights0, sum_weights0):
     """ Calculates the effective sample size """
@@ -407,7 +408,7 @@ class LaggedPf():
                 ind2 = self.params["N"] * (self.pstep - self.params["L"] + 2)
                 _, fxn = solve(self.params["N"], self.path[:, ind1:ind2], self.params)
 
-        _iterline(self.params["isim"], 2, self.pstep, k, timestart)
+        _iterline(self.params, self.params["isim"], 2, self.pstep, k, timestart)
         if not resampled:
             self.path, self.lw_old = resample_2(ess, self.pstep, self.path,
                                                 weights, self.params)[0:2]
@@ -468,7 +469,7 @@ class LaggedPf():
             self.signal = path2update[:, ind1:ind2]
             k += 1
         # end while
-        _iterline(self.params["isim"], 1, self.pstep, k, timestart)
+        _iterline(self.params, self.params["isim"], 1, self.pstep, k, timestart)
         if not resampled:
             self.path, self.lw_old = resample_2(ess, self.pstep, self.path,
                                                 weights, self.params)[0:2]
@@ -519,7 +520,7 @@ class LaggedPf():
                 # Need to modify here to include R1_inv and R2_inv:
                 # X = mcmc1(self.params, n,h,phi,k,X,Yn,fx0, R1_inv, R2_inv)
             k += 1
-        _iterline(self.params["isim"], 0, 1, k, timestart)
+        _iterline(self.params, self.params["isim"], 0, 1, k, timestart)
         if not resampled:
             self.signal, lw_old = resample_1(ess, self.signal,
                                              weights, self.params)[0:2]
