@@ -199,11 +199,11 @@ def mcmc2(params, pstep, isim, phi, k, path, signal):
         log_u = np.log(np.random.uniform(size=(params['N'])))
         for j in range(params['N']):
             if log_u[j] < log_accep[j]:
-                lo_g[j, :] = lg_p[j, :]
+                if leng >= 1:
+                    lo_g[j, :] = lg_p[j, :]
                 lo_f[j, :] = lf_p[j, :]
-                for istep in range(pstep):
-                    ind1 = params['N'] * istep + j
-                    path2update[:, ind1] = path_p[:, ind1]
+                ind1 = params['N'] * np.arange(pstep + 2, dtype=int) + j
+                path2update[:, ind1] = path_p[:, ind1]
                 accept[j] += 1
         accep_rate = accept / mcmciter
         aar = np.mean(accep_rate)
@@ -359,25 +359,38 @@ def mcmc3(params, pstep, isim, path, signal, phi, k, fx0, x_f_n_ml_p1,
             vec_mu2 = path2update[:, ind1:ind2] - x_f_n_ml_p1
             log_mu2 = np.diag(-0.5 * mat_mul(vec_mu2.T, mat_mul(p_f_n_ml_p1_inv, vec_mu2))).copy()
 
-        log_ratio = phi[(k + 1)] * (lg_pr + log_mu2_p + lo_f[:, 0] \
+        
+        if (pstep+1) % params["t_freq"] == 0:
+            log_ratio = phi[(k + 1)] * (lg_pr + log_mu2_p + lo_f[:, 0] \
                                      - lg_r - log_mu2 - lf_p[:, 0])
-        log_accep = log_ratio + log_mu1_p \
+        else:
+            log_ratio = phi[(k + 1)] * (log_mu2_p + lo_f[:, 0] \
+                                        - log_mu2 - lf_p[:, 0])
+
+        if leng >= 1:
+            log_accep = log_ratio + log_mu1_p \
                             + np.sum(lf_p, axis=1) \
                             + np.sum(lg_p, axis=1) - log_mu1 \
                             - np.sum(lo_f, axis=1) \
                             - np.sum(lo_g, axis=1)
+        else:
+            log_accep = log_ratio + log_mu1_p \
+                            + np.sum(lf_p, axis=1) \
+                            - log_mu1 - np.sum(lo_f, axis=1) 
+
 
         log_u = np.log(np.random.uniform(size=params["N"]))
         for j in range(params["N"]):
             if log_u[j] < log_accep[j]:
-                lg_r[j] = lg_pr[j]
+                if (pstep+1) % params["t_freq"] == 0:
+                    lg_r[j] = lg_pr[j]
                 log_mu1[j] = log_mu1_p[j]
                 log_mu2[j] = log_mu2_p[j]
                 lo_f[j, :] = lf_p[j, :]
-                lo_g[j, :] = lg_p[j, :]
-                for istep in range(params["L"]+1):
-                    ind1 = params["N"] * istep + j
-                    path2update[:, ind1] = path_p[:, ind1]
+                if leng >= 1:
+                    lo_g[j, :] = lg_p[j, :]
+                ind1 = params["N"] * np.arange(params["L"] + 1, dtype=int) + j
+                path2update[:, ind1] = path_p[:, ind1]
                 accept[j] += 1
         accep_rate = accept / mcmciter
         aar = np.mean(accep_rate)
