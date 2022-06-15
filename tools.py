@@ -1,15 +1,15 @@
 """Tools for linalg comps"""
 import scipy.linalg as sc
 import numpy as np
-# from jax.numpy import matmul as gmatmul
+#from jax.numpy import matmul as gmatmul
 #import numba
 
 
 def mat_mul(mat1, mat2):
     """Matrix multiplication"""
     return np.matmul(mat1, mat2)
-    # result = gmatmul(mat1, mat2)
-    # return np.array(result)
+    #result = gmatmul(mat1, mat2)
+    #return np.array(result)
 
 def mvnrnd(mean, cov, coln=1):
     """ multivariate_normal (faster than the numpy built-in function:
@@ -27,8 +27,8 @@ def mvnrnd(mean, cov, coln=1):
     return result
 
 def fwd_slash(mat1, mat2):
-    """ equivalent to A/B in MATLAB. That is solve for x in: x * B = A
-        This is equivalent to: B.T * x.T = A.T """
+    """ equivalent to mat1/mat2 in MATLAB. That is to solve for x in: x * mat2 = mat1
+        This is equivalent to: mat2.T * x.T = mat1.T """
     return np.linalg.solve(mat2.T, mat1.T).T
 
 def bisection(func, params, point_a=0., point_b=1.):
@@ -39,10 +39,10 @@ def bisection(func, params, point_a=0., point_b=1.):
     func_a = func(point_a)
     func_b = func(point_b)
     if func_a * func_b >= 0:
-        msg = "f(a) and f(b) must have different signs\n"
-        msg = msg + " f(a) = %.4f, f(b) = %.4f\n" % (func_a, func_b)
-        msg = msg + 'Try different values of b\n'
-        print(msg)
+        #msg = "f(a) and f(b) must have different signs\n"
+        #msg = msg + " f(a) = %.4f, f(b) = %.4f\n" % (func_a, func_b)
+        #msg = msg + 'Try different values of b\n'
+        #print(msg)
         iters = 0
         point_b = point_b/20
         func_b = func(point_b)
@@ -51,8 +51,6 @@ def bisection(func, params, point_a=0., point_b=1.):
             point_b = point_b - 0.0005
             func_b = func(point_b)
         if func_a * func_b >= 0:
-            msg = 'Failed to find b so that f(a)*f(b) >= 0, f(b)= %.3f \n'
-            print(msg % func_b)
             zero = point_a
             converged = False
             return zero, converged

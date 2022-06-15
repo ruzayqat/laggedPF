@@ -1,6 +1,7 @@
-from filters import enkf, etkf, etkf_sqrt
+from ensemble_filters import enkf, etkf, etkf_sqrt
 from functools import partial
 import multiprocessing as mp
+from parameters import get_params
 
 def main(filter_name, input_file, nsimul):
     """main function"""
@@ -10,13 +11,15 @@ def main(filter_name, input_file, nsimul):
         filter_func = etkf
     elif filter_name == "etkf_sqrt":
         filter_func = etkf_sqrt
+
     filter_func = partial(filter_func, input_file)
     simu = range(nsimul)
-    pool = mp.Pool(nsimul)
+    pool = mp.Pool(processes = nsimul)
     pool.map(filter_func, simu)
 
 if __name__ == '__main__':
-    nsimul = 50
     input_file = "example_input.yml"
+    params = get_params(input_file)
+    nsimul = params["nsimu"]
     filter_name = "enkf"
     main(filter_name, input_file, nsimul)

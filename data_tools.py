@@ -1,85 +1,82 @@
 """Module for data functions"""
-import os
-import numpy as np
+import os, numpy as np
 from tqdm import tqdm
 import h5py
-from tools import (mvnrnd, mat_mul)
+from tools import mvnrnd, mat_mul
 from solver import solve
 
 def sample_from_f(num, num_part, noised, t_simul, params):
     """ Sample from f(x_n|x_{n-1}) """
-    # num_part is the number of particles
-    # num only used for noise geneation
     if (num_part != 1) & (num_part != num):
         raise ValueError('Error: M must be either equal to 1 or N')
-    tstep, noised = solve(num_part, noised, params)
-
-    t_simul += tstep
-    noised = noised.real
-    if num_part == 1:
-        fx0 = noised
-        noised = np.transpose([fx0] * num)
     else:
-        fx0 = []
-    if params["X_CoefMatrix_is_eye"]:
-        noise = np.random.normal(size=(params["dimx"], num))  # size = dimx x num
-        noised = noised + params["sig_x"] * noise
-    else:
-        raise NotImplementedError("Only X_CoefMatrix_is_eye is supported")
-        # need to provide R1_sqrt & R1 = mat_mul(R1_sqrt, R1_sqrt) & ldet_R1
-        #noise = np.random.normal(size=(params["dimx"], num))  # size = dimx x num
-        #noised = noised + mat_mul(R1_sqrt, noise)
-    return t_simul, noised, fx0
+        tstep, noised = solve(num_part, noised, params)
+        t_simul += tstep
+        noised = noised.real
+        if num_part == 1:
+            fx0 = noised
+            noised = np.transpose([fx0] * num)
+        else:
+            fx0 = []
+        if params['X_CoefMatrix_is_eye']:
+            noise = np.random.normal(size=(params['dimx'], num))
+            noised = noised + params['sig_x'] * noise
+        else:
+            raise NotImplementedError('Only X_CoefMatrix_is_eye is supported')
+    return (
+     t_simul, noised, fx0)
 
 
 def initial_condition(params):
     """initialcondition"""
-    x_mesh = np.linspace(0 - params["dx"], 2 + params["dx"], params["dim"])
+    x_mesh = np.linspace(0 - params['dx'], 2 + params['dx'], params['dim'])
     x_mesh, y_mesh = np.meshgrid(x_mesh, x_mesh)
-
-    height = np.ones((params["dim"], params["dim"]))
+    height = np.ones((params['dim'], params['dim']))
     cond = (x_mesh >= 0.5) & (x_mesh <= 1) & (y_mesh >= 0.5) & (y_mesh <= 1)
     height[cond] = 2.5
-    x_star = np.zeros(params["dimx"])
-    x_star[0:params["dim2"]] = height.flatten()
+    x_star = np.zeros(params['dimx'])
+    x_star[0:params['dim2']] = height.flatten()
     return x_star
 
 
 def generate_data(params, x_star):
     """doctsring"""
-    print("Generating signal....")
-    signal = np.zeros(params["dimx"])
+    X = x_star
     signal = x_star
-    dump_data(params, signal, 0, "signal")
-    for step in tqdm(range(params["T"])):
+    dump_data(params, X, 0, "x_nonpertur")
+    dump_data(params, X, 0, "signal")
+
+    print('Generating data....')
+    for step in tqdm(range(params['T'])):
+        tstep, X = solve(1, X, params)
+        dump_data(params, X, step+1, "x_nonpertur")
         tstep, signal = solve(1, signal, params)
+        noise_x = np.random.normal(size=(params['dimx']))
+        if params['X_CoefMatrix_is_eye']:
+            signal = signal + params['sig_x'] * noise_x
+        else:
+            raise NotImplementedError('Only X_CoefMatrix_is_eye is supported')
         dump_data(params, signal, step+1, "signal")
 
-    data = np.zeros(params["dimo"])
-    # x_pertur = np.zeros(params["dimx"])
-    x_pertur = x_star
-    dump_data(params, x_pertur, 0, "x_pertur")
-    t_obs = 0.
-    print("Generating data....")
-    for step in tqdm(range(params["T"])):
-        tstep, x_pertur = solve(1, x_pertur, params)
-        dump_data(params, x_pertur, step+1, "x_pertur")
-        t_obs += tstep
-        noise_x = np.random.normal(size=(params["dimx"]))
-        if params["X_CoefMatrix_is_eye"]:
-            x_pertur = x_pertur + params["sig_x"] * noise_x
+        if (step + 1) % params["t_freq"] == 0:
+            noise_o = np.random.normal(size=(params['dimo']))
+
+            if params['Y_CoefMatrix_is_eye']:
+                if params["C_is_eye"]:
+                    data =  signal + params['sig_y'] * noise_o
+                else:
+                    data = mat_mul(params['C'] , signal) + params['sig_y'] * noise_o
+            else:
+                raise NotImplementedError('Only Y_CoefMatrix_is_eye is supported')
+            dump_data(params, data, step, 'data')
         else:
-            raise NotImplementedError("Only X_CoefMatrix_is_eye is supported")
-            #x_pertur = x_pertur + mat_mul(R1_sqrt, noise_x)
-        noise_o = np.random.normal(size=(params["dimo"]))
-        data = mat_mul(params["C"], x_pertur)
-        if params["Y_CoefMatrix_is_eye"]:
-            data += params["sig_y"] * noise_o
-        else:
-            raise NotImplementedError("Only Y_CoefMatrix_is_eye is supported")
-            #data += mat_mul(R2_sqrt, noise_o)
-        dump_data(params, data, step, "data")
-    return signal, data
+            #There is no data at time = step..you can fill it anything.
+            #I choose to fill it with zeros  or can leave it empty. 
+            #But has to add to the matrix 'data' to avoid confusion with indexing later on
+            dump_data(params, np.zeros(params['dimo']), step, 'data')
+
+    return (signal, data)
+
 
 def dump_data(params, array, step, name):
     """Dumping array step"""
@@ -99,8 +96,9 @@ def get_predictor_stats(params, step):
     """get_predictor_stats"""
     with h5py.File(params["predictor_file"], "r") as fin:
         pred_mean = fin["step%08d"%step]["mean"][...]
-        pred_cov = fin["step%08d"%step]["cov_array"][...]
-    return pred_mean, pred_cov
+        pred_inv_cov = fin["step%08d"%step]["inv_cov_array"][...]
+        logdet_cov = fin["step%08d"%step]["logdet_cov"][...]
+    return pred_mean, pred_inv_cov, logdet_cov
 
 def get_data(params, step):
     """get_data"""

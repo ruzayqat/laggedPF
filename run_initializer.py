@@ -2,7 +2,7 @@
 from data_tools import (initial_condition,
                         generate_data)
 from parameters import get_params
-from ensemble_kalman import ensemble_kalman_filter
+from gnerate_pred_using_EnKF import ensemble_kalman_filter
 
 def main():
     """Test main function"""

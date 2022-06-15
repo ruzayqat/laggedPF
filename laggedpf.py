@@ -14,7 +14,7 @@ def _iterline(params, isim, stage, step, kappa, timestart):
     msg = '\t [LPF-%d] isim = %05d, p(%05d) = %05d elapsed = %14.8es\n'
     msg = msg % (stage, isim, step, kappa, elapsed)
     print(msg)
-    filename = "%s/lpf_%08d.log" %(params["lagged_dir"], isim)
+    filename = "%s/lpf_%08d.log" %(params["lpf_dir"],isim)
     with open(filename, "a") as fout:
        fout.write(msg)
 
@@ -136,7 +136,6 @@ def weight_2(step, data, delta, signal, aggr, params):
 
 def funcofdelta_1(data, signal, delta, params):
     """needs docstring"""
-    # weights_1(data, delta, signal, lw_old, params)
     if params["Y_CoefMatrix_is_eye"]:
         func_ = partial(weights_1, data=data, signal=signal,
                         lw_old=np.zeros(params["N"]), params=params)
@@ -144,7 +143,6 @@ def funcofdelta_1(data, signal, delta, params):
     else:
         raise NotImplementedError("Matrix R2_inv not implemented yet!")
         # need to modify to pass R2_inv:
-        # lw, We, weights0, sum_weights0 = weights_1(Y1, phi[0], np.zeros(N),R2_inv)
     ess = calc_ess(weights0, sum_weights0) - params["ESS_threshold"]
     return ess
 
@@ -207,11 +205,7 @@ class LaggedPf():
         self._setup()
 
     def _setup(self):
-        # files = ["data_file", "predictor_file", "lagged_file"]
-        files = ["lagged_file"]
-        # log_file = "lpf_%08d.log" %self.params["isim"]
-
-        # for i, file in enumerate(files):
+        files = ["lpf_file"]
         for _, file in enumerate(files):
             filename = os.path.basename(self.params[file])
             filename = "%s_%05d.h5" %(filename.split(".h5")[0], self.params["isim"])
@@ -239,12 +233,12 @@ class LaggedPf():
 
     def _dump_restart(self):
         if "restart_file" not in self.params:
-            filename = "restarts/restart_%08d.h5"
-            self.params["restart_file"] = filename %self.params["isim"]
+            filename = "%s/restart_%08d.h5" 
+            self.params["restart_file"] = filename %(self.params["restart_dir"],self.params["isim"])
 
-        filename = "lpf_%08d.log" %self.params["isim"]
-        with open(filename, "a") as fout:
-            fout.write("Dumping restart file file %s\n" %self.params["restart_file"])
+        # filename = "lpf_%08d.log" %self.params["isim"]
+        # with open(filename, "a") as fout:
+        #     fout.write("Dumping restart file %s\n" %self.params["restart_file"])
 
         dir_ = os.path.dirname(self.params["restart_file"])
         os.makedirs(dir_, exist_ok=True)
@@ -257,17 +251,6 @@ class LaggedPf():
             fout.create_dataset(name="ess_saved", data=self.ess_saved)
             fout.create_dataset(name="path", data=self.path)
             fout.attrs["ite"] = self.pstep
-
-    # def _dump(self):
-    #     log_file = "lpf_%08d.log" %self.params["isim"]
-    #     with open(log_file, "a") as fout:
-    #         fout.write("Dumping results to file %s\n" %self.params["lagged_file"])
-    #     dir_ = os.path.dirname(self.params["lagged_file"])
-    #     os.makedirs(dir_, exist_ok=True)
-    #     with h5py.File(self.params["lagged_file"], "w") as fout:
-    #         fout.create_dataset(name="t_simul", data=self.t_simul)
-    #         fout.create_dataset(name="ess_saved", data=self.ess_saved)
-    #         fout.create_dataset(name="path", data=self.path)
 
     def step0(self):
         """n=0"""
@@ -285,7 +268,7 @@ class LaggedPf():
         self.fx0 = self.fx0.reshape(-1, 1)
         if (self.pstep + 1) % self.params["t_freq"] == 0:
             self._step0_process(phi)
-        ind1 = self.params["N"] * 1
+        ind1 = self.params["N"]
         ind2 = self.params["N"] * 2
         self.path[:, ind1:ind2] = self.signal
 
@@ -322,21 +305,125 @@ class LaggedPf():
         self.path[:, ind1:ind2] = self.signal
 
 
+    def _step0_process(self, phi):
+        timestart = time.time()
+        data = get_data(self.params, 0).reshape(-1, 1)
+        if self.params["Y_CoefMatrix_is_eye"]:
+            _, weights, weights0, sum_weights0 = weights_1(data, phi[0],
+                                                           self.signal,
+                                                           np.zeros(self.params["N"]),
+                                                           self.params)
+        else:
+            raise NotImplementedError("only Y_CoefMatrix_is_eye is supported")
+            # need to modify to include R2_inv:
+        # resample if necessary:
+        ess = calc_ess(weights0, sum_weights0)
+        self.ess_saved.append(ess)
+        self.signal, lw_old = resample_1(ess, self.signal, weights, self.params)[0:2]
+        terminate = False
+        k = 0
+        while not terminate:
+            func_ = lambda delta: funcofdelta_1(data, self.signal, delta, self.params)
+            delta, converged = bisection(func_, self.params)
+            terminate, converged, k, phi, delta = _get_conv(terminate, converged, k, phi, delta)
+
+            if self.params["Y_CoefMatrix_is_eye"]:
+                _, weights, weights0, sum_weights0 = weights_1(data, delta,
+                                                               self.signal, lw_old,
+                                                               self.params)
+            else:
+                raise NotImplementedError("only Y_CoefMatrix_is_eye is supported")
+                # lw,We,We0,sumWe0 = weights_1(Y1,delta,X,np.zeros(N),R2_inv)
+            # resample if necessary:
+            ess = calc_ess(weights0, sum_weights0)
+            self.ess_saved.append(ess)
+            self.signal, lw_old, resampled = resample_1(ess, self.signal,
+                                                        weights, self.params)
+
+            if self.params["X_CoefMatrix_is_eye"] & self.params["Y_CoefMatrix_is_eye"]:
+                self.signal = mcmc1(self.params, 0, self.params["isim"],
+                                    phi, k, self.signal, data, self.fx0)
+            else:
+                raise NotImplementedError("only Y_CoefMatrix_is_eye is supported")
+                # Need to modify here to include R1_inv and R2_inv:
+                # X = mcmc1(self.params, n,h,phi,k,X,Yn,fx0, R1_inv, R2_inv)
+            k += 1
+        _iterline(self.params, self.params["isim"], 0, 1, k, timestart)
+        if not resampled:
+            self.signal, lw_old = resample_1(ess, self.signal,
+                                             weights, self.params)[0:2]
+            
+    def _step1_process(self, phi):
+        timestart = time.time()
+        data = get_data(self.params, self.pstep).reshape(-1, 1) 
+        #reshape(-1,1) converts the data from a row to a column 
+        if self.params["Y_CoefMatrix_is_eye"]:
+            log_w, weights, weights0, sum_weights0 = weights_1(data, phi[0], self.pstep, self.signal,
+                                                               self.lw_old, self.params)
+        else:
+            raise NotImplementedError("only Y_CoefMatrix_is_eye is supported")
+            # need to modify to include R2_inv:
+            # lw, We, We0, sumWe0 = weights_1(Y1, phi[0],X,np.zeros(N),R2_inv)
+        # resample if necessary:
+        ess = calc_ess(weights0, sum_weights0)
+        self.ess_saved.append(ess)
+        self.signal, self.lw_old = resample_1(ess, self.signal, log_w, weights)[0:2]
+        terminate = False
+        k = 0
+
+        while not terminate:
+            # (ESS - ESS_threshold) as a function of delta:
+            func_ = lambda delta: funcofdelta_1(data, self.pstep, self.signal, delta, self.params)
+            delta, converged = bisection(func_, self.params)
+            terminate, converged, k, phi, delta = _get_conv(terminate, converged, k, phi, delta)
+            if self.params["Y_CoefMatrix_is_eye"]:
+                log_w, weights, weights0, sum_weights0 = weights_1(data, delta,
+                                                                   self.signal,
+                                                                   self.lw_old,
+                                                                   self.params)
+            else:
+                raise NotImplementedError("only Y_CoefMatrix_is_eye is supported")
+                # need to modify to pass R2_inv:
+            # resample if necessary:
+            ess = calc_ess(weights0, sum_weights0)
+            self.ess_saved.append(ess)
+            self.signal, self.lw_old, resampled = resample_1(ess, self.signal, log_w, weights)
+            ##### mcmc step - random walk ########
+            if self.params["X_CoefMatrix_is_eye"] & self.params["Y_CoefMatrix_is_eye"]:
+                path2update = mcmc2(self.params, self.pstep,
+                                    self.params["isim"], phi, k,
+                                    self.path, self.signal)
+            else:
+                raise NotImplementedError("only Y_CoefMatrix_is_eye is supported")
+                # Need to modify here to include R1_inv and R2_inv:
+            self.path[:, 0:self.params["N"] * (self.pstep + 2)] = path2update
+            # at this laggedpf step, self.pstep is in [1,L-1]
+            ind1 = self.params["N"] * (self.pstep + 1)
+            ind2 = self.params["N"] * (self.pstep + 2)
+            self.signal = path2update[:, ind1:ind2]
+            k += 1
+        # end while
+        _iterline(self.params, self.params["isim"], 1, self.pstep, k, timestart)
+        if not resampled:
+            self.path, self.lw_old = resample_2(ess, self.pstep, self.path,
+                                                weights, self.params)[0:2]
+        ind1 = self.params["N"] * (self.pstep + 1)
+        ind2 = self.params["N"] * (self.pstep + 2)
+        self.signal = self.path[:, ind1:ind2]
+
+
     def _step2_process(self, phi):
         timestart = time.time()
         step = self.pstep - self.params["L"] + 1
-        pred_mean_n_ml_p1, pred_conv_n_ml_p1 = get_predictor_stats(self.params,
-                                                                   step)
+        pred_mean_n_ml_p1, pred_cov_n_ml_p1_inv,\
+                     ldet_pred_cov_n_ml_p1 = get_predictor_stats(self.params, step)
         pred_mean_n_ml_p1 = pred_mean_n_ml_p1.reshape(-1, 1)
-        pred_cov_n_ml_p1_inv = fwd_slash(self.params["Idx"],
-                                         pred_conv_n_ml_p1)
-        ldet_pred_cov_n_ml_p1 = logdet(pred_conv_n_ml_p1)
+
 
         step = self.pstep - self.params["L"]
-        pred_mean_n_ml, pred_conv_n_ml = get_predictor_stats(self.params,
+        pred_mean_n_ml, pred_cov_n_ml_inv, _ = get_predictor_stats(self.params,
                                                              step)
         pred_mean_n_ml = pred_mean_n_ml.reshape(-1, 1)
-        pred_cov_n_ml_inv = fwd_slash(self.params["Idx"], pred_conv_n_ml)
 
         #------
         ind1 = self.params["N"] * (self.pstep - self.params["L"] + 1)
@@ -394,8 +481,7 @@ class LaggedPf():
                                     pred_mean_n_ml, pred_cov_n_ml_inv)
             else:
                 raise NotImplementedError("only Y_CoefMatrix_is_eye is supported")
-                # Need to modify here to include R1_inv and R2_inv:
-                # X = mcmc2(self.params, n,h,phi,k,self.path,X,Yn, R1_inv, R2_inv)
+                # Need to modify here to include R1_inv and R2_inv
             ind1 = self.params["N"] * (self.pstep - self.params["L"] + 1)
             ind2 = self.params["N"] * (self.pstep + 2)
             self.path[:, ind1:ind2] = path2update
@@ -418,109 +504,7 @@ class LaggedPf():
 
 
 
-    def _step1_process(self, phi):
-        timestart = time.time()
-        data = get_data(self.params, self.pstep).reshape(-1, 1)
-        if self.params["Y_CoefMatrix_is_eye"]:
-            log_w, weights, weights0, sum_weights0 = weights_1(data, phi[0], self.signal,
-                                                               self.lw_old, self.params)
-        else:
-            raise NotImplementedError("only Y_CoefMatrix_is_eye is supported")
-            # need to modify to include R2_inv:
-            # lw, We, We0, sumWe0 = weights_1(Y1, phi[0],X,np.zeros(N),R2_inv)
-        # resample if necessary:
-        ess = calc_ess(weights0, sum_weights0)
-        self.ess_saved.append(ess)
-        self.signal, self.lw_old = resample_1(ess, self.signal, log_w, weights)[0:2]
-        terminate = False
-        k = 0
 
-        while not terminate:
-            # (ESS - ESS_threshold) as a function of delta:
-            func_ = lambda delta: funcofdelta_1(data, self.signal, delta, self.params)
-            delta, converged = bisection(func_, self.params)
-            terminate, converged, k, phi, delta = _get_conv(terminate, converged, k, phi, delta)
-            if self.params["Y_CoefMatrix_is_eye"]:
-                log_w, weights, weights0, sum_weights0 = weights_1(data, delta,
-                                                                   self.signal,
-                                                                   self.lw_old,
-                                                                   self.params)
-            else:
-                raise NotImplementedError("only Y_CoefMatrix_is_eye is supported")
-                # need to modify to pass R2_inv:
-                # lw,We,We0,sumWe0 = weights_1(Y1,delta,X,np.zeros(N),R2_inv)
-            # resample if necessary:
-            ess = calc_ess(weights0, sum_weights0)
-            self.ess_saved.append(ess)
-            self.signal, self.lw_old, resampled = resample_1(ess, self.signal, log_w, weights)
-            ##### mcmc step - random walk ########
-            if self.params["X_CoefMatrix_is_eye"] & self.params["Y_CoefMatrix_is_eye"]:
-                path2update = mcmc2(self.params, self.pstep,
-                                    self.params["isim"], phi, k,
-                                    self.path, self.signal, data)
-            else:
-                raise NotImplementedError("only Y_CoefMatrix_is_eye is supported")
-                # Need to modify here to include R1_inv and R2_inv:
-                # path2update =mcmc2(self.params, n,h,phi,k,path,X,Yn,R1_inv,R2_inv)
-            self.path[:, 0:self.params["N"] * (self.pstep + 2)] = path2update
-            # at this laggedpf step, self.pstep is in [1,L-1]
-            ind1 = self.params["N"] * (self.pstep + 1)
-            ind2 = self.params["N"] * (self.pstep + 2)
-            self.signal = path2update[:, ind1:ind2]
-            k += 1
-        # end while
-        _iterline(self.params, self.params["isim"], 1, self.pstep, k, timestart)
-        if not resampled:
-            self.path, self.lw_old = resample_2(ess, self.pstep, self.path,
-                                                weights, self.params)[0:2]
-        ind1 = self.params["N"] * (self.pstep + 1)
-        ind2 = self.params["N"] * (self.pstep + 2)
-        self.signal = self.path[:, ind1:ind2]
+    
 
-    def _step0_process(self, phi):
-        timestart = time.time()
-        data = get_data(self.params, 0).reshape(-1, 1)
-        if self.params["Y_CoefMatrix_is_eye"]:
-            _, weights, weights0, sum_weights0 = weights_1(data, phi[0], self.signal,
-                                                           np.zeros(self.params["N"]),
-                                                           self.params)
-        else:
-            raise NotImplementedError("only Y_CoefMatrix_is_eye is supported")
-            # need to modify to include R2_inv:
-            # lw, We, We0, sum_weights0 = weights_1(Y1, phi[0],X,np.zeros(N),R2_inv)
-        # resample if necessary:
-        ess = calc_ess(weights0, sum_weights0)
-        self.ess_saved.append(ess)
-        self.signal, lw_old = resample_1(ess, self.signal, weights, self.params)[0:2]
-        terminate = False
-        k = 0
-        while not terminate:
-            func_ = lambda delta: funcofdelta_1(data, self.signal, delta, self.params)
-            delta, converged = bisection(func_, self.params)
-            terminate, converged, k, phi, delta = _get_conv(terminate, converged, k, phi, delta)
-
-            if self.params["Y_CoefMatrix_is_eye"]:
-                _, weights, weights0, sum_weights0 = weights_1(data, delta,
-                                                               self.signal, lw_old,
-                                                               self.params)
-            else:
-                raise NotImplementedError("only Y_CoefMatrix_is_eye is supported")
-                # lw,We,We0,sumWe0 = weights_1(Y1,delta,X,np.zeros(N),R2_inv)
-            # resample if necessary:
-            ess = calc_ess(weights0, sum_weights0)
-            self.ess_saved.append(ess)
-            self.signal, lw_old, resampled = resample_1(ess, self.signal,
-                                                        weights, self.params)
-
-            if self.params["X_CoefMatrix_is_eye"] & self.params["Y_CoefMatrix_is_eye"]:
-                self.signal = mcmc1(self.params, 0, self.params["isim"],
-                                    phi, k, self.signal, data, self.fx0)
-            else:
-                raise NotImplementedError("only Y_CoefMatrix_is_eye is supported")
-                # Need to modify here to include R1_inv and R2_inv:
-                # X = mcmc1(self.params, n,h,phi,k,X,Yn,fx0, R1_inv, R2_inv)
-            k += 1
-        _iterline(self.params, self.params["isim"], 0, 1, k, timestart)
-        if not resampled:
-            self.signal, lw_old = resample_1(ess, self.signal,
-                                             weights, self.params)[0:2]
+    

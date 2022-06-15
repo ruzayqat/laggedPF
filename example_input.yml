@@ -1,33 +1,38 @@
-C_is_eye: false
-L: 1
-M: 1000
-MCMCnmax: 15
-MCMCnmin: 10
-N: 100
-ESS_t: 0.5
-T: 10
-X_CoefMatrix_is_eye: true
-Y_CoefMatrix_is_eye: true
-aar_max: 0.25
-aar_min: 0.15
-bisection_nmax: 1000
-bisection_error: 1.e-3
-bisection_diff: 1.e-8
-c: 0.5
-d: 5
-g: 9.81
-h_freq: 1
-t_freq: 1
-phi1: 1.e-5
-sig: 2.38
-sig_x: 0.01
-sig_y: 0.01
-v_freq: 3
-mcmc_log_dir: ./example/mcmc
-data_file: ./example/data.h5
-predictor_file: ./example/predictor_stats.h5
-lagged_dir: ./example/lpf
-lagged_file: ./example/lpf/lagged_pf.h5
+ncores: 20 #number of processors available on the machine
+nsimu: 20 #must be a multiple of ncores
+L: 1 #the lag is L+1
+M: 1000 #number of ensembles in ensemble mehtods
+MCMCnmax: 15 #num of maximum MCMC steps inside SMC sampler
+MCMCnmin: 10 #num of minimum MCMC steps inside SMC sampler
+N: 100 #number of particles
+ESS_t: 0.7 #Threshold on effective sample size
+T: 10 #stop simulations after T time steps
+C_is_eye: false #is matrix C the identity?
+X_CoefMatrix_is_eye: true #is matrix R1^{1/2} the identity?
+Y_CoefMatrix_is_eye: true #is matrix R2^{1/2} the identity?
+aar_max: 0.25000 #max average acceptance rate of MCMC step in SMC sampler
+aar_min: 0.15 #min average acceptance rate of MCMC step in SMC sampler
+bisection_nmax: 2000 #max iters of bisection method used to compue temperatures
+bisection_error: 1.e-4 #when the diff between two consequtive roots less than this, stop
+bisection_diff: 1.e-8 #when the size of the interval [a,b] is less than this, stop
+c: 0.5 #used inside the solver
+d: 5 #dimension of the hidden state
+g: 9.81 #gravity const
+h_freq: 1 #spacial frequency of observing the height
+v_freq: 3 #spacial frequency of observing the velocities (u,v)
+t_freq: 1 #time frequency
+phi1: 1.e-5 #first temperature in the SMC sampler
+sig: 2.38 #needed for the cov of the RW proposal in MCMC
+sig_x: 0.01 #noise standard deviation in hidden state
+sig_y: 0.01 #noise standard deviation in obs state
+###########File and Folders to save results ###########
+main_dir: ./example
+lpf_dir: ./example/lpf
+lpf_file: ./example/lpf/lagged_pf.h5
+mcmc_dir: ./example/lpf/mcmc
+restart_dir: ./example/lpf/restart
 enkf_dir: ./example/enkf
 etkf_dir: ./example/etkf
 etkf_sqrt_dir: ./example/etkf_sqrt
+data_file: ./example/data/data.h5
+predictor_file: ./example/lpf/predictor/predictor_stats.h5

@@ -10,9 +10,10 @@ from scipy.sparse import diags
 from tools import (mat_mul, mvnrnd, fwd_slash, symmetric)
 from solver import solve
 from parameters import get_params
+from data_tools import get_data
 
 def _initialize(params):
-    initial = _get_data(params, -1)
+    initial = _get_xstar(params)
     x_a = np.transpose([initial] * params["M"])
     e_loc = np.zeros((params["dimx"], params["T"] + 1))
     e_loc[:, 0] = initial
@@ -25,15 +26,6 @@ def dump(filename, t_simul, e_loc):
         fout.create_dataset(name="E_loc", data=e_loc)
         fout.create_dataset(name="Time", data=t_simul)
 
-def _get_data(params, step):
-    with h5py.File(params["data_file"], "r") as fin:
-        if step == -1:
-            key = "step_%08d/signal" %0
-        else:
-            key = "step_%08d/data" %step
-
-        data = fin[key][...]
-    return data
 
 def _logline(filter_name, params, step, runtime):
     filename = "%s_log_%03d.log" %(filter_name, params["isim"])
@@ -55,9 +47,7 @@ def enkf(input_file, isim):
     Arguments:
     input_file {str}: Name or full path to the input yaml file
     isim {int}: Simulation identifier
-
-    Returns:
-    None
+    Returns: None
     """
     params = get_params(input_file)
     matrix = np.eye(params["dimo"]) * params["sig_y"]
@@ -105,7 +95,7 @@ def _filtering(params, filter_name, matrix, isim):
     t_simul, e_loc = filter_func(matrix, params)
     directory = os.path.abspath(params["%s_dir" %filter_name])
     os.makedirs(directory, exist_ok=True)
-    filename = "%s/sim_%03d.h5" %(directory, isim)
+    filename = "%s/sim_%08d.h5" %(directory, isim)
     dump(filename, t_simul, e_loc)
 
 
@@ -119,48 +109,53 @@ def enkf_run(r2_sqrt, params):
         r2_mat = mat_mul(r2_sqrt, r2_sqrt)
 
     total_time = 0
+    filename = "%s/EnKF" %params["enkf_dir"]
     for step in range(params["T"]):
         tick = time.time()
         t_simul, e_loc[:, step + 1] = _enkf_step(params, r2_mat, r2_sqrt, x_a,
                                                  step)
         tack = time.time()
         total_time += tack - tick
-        _logline("ENKF", params, step, total_time)
+        _logline(filename, params, step, total_time)
     return t_simul, e_loc
 
 def _enkf_step(params, r2_mat, r2_sqrt, x_a, step):
-    t_simul, x_f = solve(params["M"], x_a, params)
-    signal = _get_data(params, step)
-    mean = np.sum(x_f, axis=1).reshape(-1, 1) / params["M"]
-    diff = x_f - mean
-    if params["C_is_eye"]:
-        temp = diff.T
-        temp = mat_mul(diff, temp) / params["M"]
-        temp = fwd_slash(params["Ido"], temp + r2_mat)
-        temp = mat_mul(diff.T, temp)
-        kappa = mat_mul(diff, temp) / params["M"]
-        dvn = mvnrnd(np.zeros(params["dimo"]), params["Ido"], coln=params["M"])
-        if params["Y_CoefMatrix_is_eye"]:
-            temp = signal.reshape(-1, 1) - x_f - params["sig_y"] * dvn
+    t_simul, x_f = solve(params['M'], x_a, params)
+    if (step + 1) % params['t_freq'] == 0:
+        data = get_data(params, step)
+        pred_mean = np.sum(x_f, axis=1) / params['M']
+        diff = x_f - pred_mean.reshape(-1, 1)
+        if params['C_is_eye']:
+            temp = diff.T
+            temp = mat_mul(diff, temp) / params['M']
+            temp = fwd_slash(params["Ido"], temp + r2_mat)
+            temp = mat_mul(diff.T, temp)
+            kappa = mat_mul(diff, temp) / params['M']
+            noise = np.random.normal(size=(params["dimo"],params["M"]))
+            if params['Y_CoefMatrix_is_eye']:
+                temp = data.reshape(-1, 1) - x_f - params['sig_y'] * noise
+            else:
+                temp = data.reshape(-1, 1) - x_f
+                temp -= mat_mul(noised_obs_mat, noise)
         else:
-            temp = signal.reshape(-1, 1) - x_f - mat_mul(r2_sqrt, dvn)
+            temp = mat_mul(diff.T, params['C'].T)
+            temp = mat_mul(diff, temp)
+            temp = mat_mul(params['C'], temp) / params['M']
+            temp = fwd_slash(params['Ido'], temp + r2_mat)
+            temp = mat_mul(params['C'].T, temp)
+            temp = mat_mul(diff.T, temp)
+            kappa = mat_mul(diff, temp) / params['M']
+            noise = np.random.normal(size=(params["dimo"],params["M"]))
+            if params['Y_CoefMatrix_is_eye']:
+                temp = data.reshape(-1, 1) - mat_mul(params['C'], x_f)
+                temp -= params['sig_y'] * noise
+            else:
+                temp = data.reshape(-1, 1) - mat_mul(params['C'], x_f)\
+                                     - mat_mul(noised_obs_mat,noise)
+        x_a = x_f + mat_mul(kappa, temp)
     else:
-        temp = mat_mul(diff.T, params["C"].T)
-        temp = mat_mul(diff, temp)
-        temp = mat_mul(params["C"], temp) / params["M"]
-        temp = fwd_slash(params["Ido"], temp + r2_mat)
-        temp = mat_mul(params["C"].T, temp)
-        temp = mat_mul(diff.T, temp)
-        kappa = mat_mul(diff, temp) / params["M"]
-        dvn = mvnrnd(np.zeros(params["dimo"]), params["Ido"], coln=params["M"])
+        x_a = x_f
 
-        if params["Y_CoefMatrix_is_eye"]:
-            temp = signal.reshape(-1, 1) - \
-                   mat_mul(params["C"], x_f) - params["sig_y"] * dvn
-        else:
-            temp = signal.reshape(-1, 1) - mat_mul(params["C"], x_f) \
-                    - mat_mul(r2_sqrt, dvn)
-    x_a = x_f + mat_mul(kappa, temp)
     return t_simul, np.sum(x_a, axis=1) / params["M"]
 
 
@@ -169,41 +164,42 @@ def etkf_run(r2_sqrt_inv, params):
     t_simul = 0.0
     x_a, e_loc = _initialize(params)
     total_time = 0
+    filename = "%s/ETKF" %params["etkf_dir"]
     for step in range(params["T"]):
         tick = time.time()
         t_simul, e_loc[:, step + 1] = _etkf_step(params, r2_sqrt_inv, x_a, step)
         tack = time.time()
         total_time += tack - tick
-        _logline("ETKF", params, step, total_time)
+        _logline(filename, params, step, total_time)
     return t_simul, e_loc
 
 
 def _etkf_step(params, r2_sqrt_inv, x_a, step):
-    # pylint: disable-msg=too-many-locals
-    signal = _get_data(params, step)
     t_simul, x_f = solve(params["M"], x_a, params)
-    m_f = np.sum(x_f, axis=1).reshape(-1, 1) / params["M"]
-    sfm = 1 / np.sqrt(params["M"] - 1) * (x_f - m_f)
-    if params["C_is_eye"]:
-        signal_hat = x_f
+
+    if (step + 1) % params['t_freq'] == 0:
+        data = get_data(params, step)
+        m_f = np.sum(x_f, axis=1).reshape(-1, 1) / params["M"]
+        sfm = 1 / np.sqrt(params["M"] - 1) * (x_f - m_f)
+        signal_hat = mat_mul(params['C'], x_f)
+        mean = np.sum(signal_hat, axis=1).reshape(-1, 1) / params["M"]
+        if params["Y_CoefMatrix_is_eye"]:
+            phi_k = 1 / np.sqrt(params["M"] - 1) * (signal_hat - mean).T / params["sig_y"]
+        else:
+            phi_k = 1 / np.sqrt(params["M"] - 1) * mat_mul((signal_hat - mean).T, r2_sqrt_inv)
+        eta_k = mat_mul(phi_k.T, phi_k) + params["Ido"]
+        kappa = mat_mul(sfm, fwd_slash(phi_k, eta_k))
+        if params["Y_CoefMatrix_is_eye"]:
+            m_a = m_f + mat_mul(kappa, ((data.reshape(-1, 1) - mean) / params["sig_y"]))
+        else:
+            m_a = m_f + mat_mul(kappa, mat_mul(r2_sqrt_inv,
+                                           (data.reshape(-1, 1) - mean)))
+        unit, diag = sc.svd(mat_mul(phi_k, phi_k.T))[0:2]
+        diag = diags(diag)
+        sfm = mat_mul(sfm, fwd_slash(unit, np.sqrt(diag + np.identity(params["M"]))))
+        x_a = np.sqrt(params["M"] - 1) * sfm + m_a
     else:
-        signal_hat = mat_mul(params["C"], x_f)
-    mean = np.sum(signal_hat, axis=1).reshape(-1, 1) / params["M"]
-    if params["Y_CoefMatrix_is_eye"]:
-        phi_k = 1 / np.sqrt(params["M"] - 1) * (signal_hat - mean).T / params["sig_y"]
-    else:
-        phi_k = 1 / np.sqrt(params["M"] - 1) * mat_mul((signal_hat - mean).T, r2_sqrt_inv)
-    eta_k = mat_mul(phi_k.T, phi_k) + params["Ido"]
-    kappa = mat_mul(sfm, fwd_slash(phi_k, eta_k))
-    if params["Y_CoefMatrix_is_eye"]:
-        m_a = m_f + mat_mul(kappa, ((signal.reshape(-1, 1) - mean) / params["sig_y"]))
-    else:
-        m_a = m_f + mat_mul(kappa, mat_mul(r2_sqrt_inv,
-                                           (signal.reshape(-1, 1) - mean)))
-    unit, diag = sc.svd(mat_mul(phi_k, phi_k.T))[0:2]
-    diag = diags(diag)
-    sfm = mat_mul(sfm, fwd_slash(unit, np.sqrt(diag + np.identity(params["M"]))))
-    x_a = np.sqrt(params["M"] - 1) * sfm + m_a
+        x_a = x_f
     return t_simul, np.sum(x_a, axis=1) / params["M"]
 
 
@@ -214,36 +210,45 @@ def etkf_sqrt_run(r2_mat, params):
     t_simul = 0.0
     x_a, e_loc = _initialize(params)
     total_time = 0
+    filename = "%s/ETKF_SQRT" %params["etkf_sqrt_dir"]
     for step in range(params["T"]):
         tick = time.time()
         t_simul, e_loc[:, step + 1] = _etkf_sqrt_step(params, r2_mat, x_a, step)
         tack = time.time()
         total_time += tack - tick
-        _logline("ETKF_SQRT", params, step, total_time)
+        _logline(filename, params, step, total_time)
     return t_simul, e_loc
 
 def _etkf_sqrt_step(params, r2_mat, x_a, step):
     # pylint: disable-msg=too-many-locals
-    signal = _get_data(params, step)
     t_simul, x_f = solve(params["M"], x_a, params)
-    m_f = np.sum(x_f, axis=1).reshape(-1, 1) / params["M"]
-    xfp = x_f - m_f
-    if params["C_is_eye"]:
-        s_mat = x_f
+
+    if (step + 1) % params['t_freq'] == 0:
+        data = get_data(params, step)
+        
+        m_f = np.sum(x_f, axis=1).reshape(-1, 1) / params["M"]
+        xfp = x_f - m_f
+        s_mat = mat_mul(params['C'], x_f)
+        mean = np.sum(s_mat, axis=1).reshape(-1, 1) / params["M"]
+        s_mat = s_mat - mean
+        invr2_s = sc.lstsq(r2_mat, s_mat)[0]
+        inv_ttt = symmetric((params["M"] - 1) * np.identity(params["M"]) +\
+                                                           mat_mul(s_mat.T, invr2_s))
+        eigenvals, eigenvects = np.linalg.eig(inv_ttt)
+        eigenvals = np.diag(eigenvals.real)
+        eigenvects = eigenvects.real
+        xap = mat_mul(eigenvects, sc.lstsq(np.sqrt(eigenvals), eigenvects.T)[0])
+        xap = np.sqrt(params["M"] - 1) * mat_mul(xfp, xap)
+        temp = mat_mul(invr2_s.T, data.reshape(-1, 1) - mean)
+        temp = sc.lstsq(eigenvals, mat_mul(eigenvects.T, temp))[0]
+        m_a = m_f + mat_mul(xfp, mat_mul(eigenvects, temp))
+        x_a = xap + m_a
     else:
-        s_mat = mat_mul(params["C"], x_f)
-    mean = np.sum(s_mat, axis=1).reshape(-1, 1) / params["M"]
-    s_mat = s_mat - mean
-    invr2_s = sc.lstsq(r2_mat, s_mat)[0]
-    inv_ttt = symmetric((params["M"] - 1) * np.identity(params["M"]) +\
-                                                       mat_mul(s_mat.T, invr2_s))
-    eigenvals, eigenvects = np.linalg.eig(inv_ttt)
-    eigenvals = np.diag(eigenvals.real)
-    eigenvects = eigenvects.real
-    xap = mat_mul(eigenvects, sc.lstsq(np.sqrt(eigenvals), eigenvects.T)[0])
-    xap = np.sqrt(params["M"] - 1) * mat_mul(xfp, xap)
-    temp = mat_mul(invr2_s.T, signal.reshape(-1, 1) - mean)
-    temp = sc.lstsq(eigenvals, mat_mul(eigenvects.T, temp))[0]
-    m_a = m_f + mat_mul(xfp, mat_mul(eigenvects, temp))
-    x_a = xap + m_a
+        x_a = x_f
     return t_simul, np.sum(x_a, axis=1) / params["M"]
+
+
+def _get_xstar(params):
+    with h5py.File(params["data_file"], "r") as fin:
+        xstar = fin["step_%08d" %0]["signal"][...]
+    return xstar
