@@ -25,7 +25,7 @@ The python code provided in this repository requires the following packages:
 - `run_lpf.py` to run the lagged particle filter
 
 Prior to running any given filter, one should provide the data and eventually the predictor
-statistics. This is done through executing the driver script `predictor_gen.py`.
+statistics. This is done through executing the driver script `gnerate_pred_using_EnKF.py`.
 
 The input for the scripts mentionned above, is specified in a yaml file format, as the one
 provided here as an example. This format is self explanatory and the variables appelation is
