@@ -2,8 +2,7 @@
 
 ## About
 This repository contains the modules used in the *SJUQ* submission  **A LAGGED PARTICLE FILTER FOR STABLE FILTERING OF 
-CERTAIN HIGH-DIMENSIONAL STATE-SPACE MODEL**, and consists of the application of the lagged particle filtering technique
-on the non-linear shallow-water equation.
+CERTAIN HIGH-DIMENSIONAL STATE-SPACE MODEL** which can be found on this link https://arxiv.org/pdf/2110.00884, and consists of the application of the lagged particle filtering technique on the non-linear shallow-water equation. For help regarding this code or the MATLAB codes that are used for the other models, please contact the first author on his email found in the article. 
 
 ## Requirements
 The python code provided in this repository requires the following packages:
