@@ -112,7 +112,7 @@ def enkf_run(r2_sqrt, params):
     filename = "%s/EnKF" %params["enkf_dir"]
     for step in range(params["T"]):
         tick = time.time()
-        t_simul, e_loc[:, step + 1] = _enkf_step(params, r2_mat, r2_sqrt, x_a,
+        t_simul, e_loc[:, step + 1], x_a = _enkf_step(params, r2_mat, r2_sqrt, x_a,
                                                  step)
         tack = time.time()
         total_time += tack - tick
@@ -156,7 +156,7 @@ def _enkf_step(params, r2_mat, r2_sqrt, x_a, step):
     else:
         x_a = x_f
 
-    return t_simul, np.sum(x_a, axis=1) / params["M"]
+    return t_simul, np.sum(x_a, axis=1) / params["M"], x_a
 
 
 def etkf_run(r2_sqrt_inv, params):
@@ -167,7 +167,7 @@ def etkf_run(r2_sqrt_inv, params):
     filename = "%s/ETKF" %params["etkf_dir"]
     for step in range(params["T"]):
         tick = time.time()
-        t_simul, e_loc[:, step + 1] = _etkf_step(params, r2_sqrt_inv, x_a, step)
+        t_simul, e_loc[:, step + 1], x_a = _etkf_step(params, r2_sqrt_inv, x_a, step)
         tack = time.time()
         total_time += tack - tick
         _logline(filename, params, step, total_time)
@@ -200,7 +200,7 @@ def _etkf_step(params, r2_sqrt_inv, x_a, step):
         x_a = np.sqrt(params["M"] - 1) * sfm + m_a
     else:
         x_a = x_f
-    return t_simul, np.sum(x_a, axis=1) / params["M"]
+    return t_simul, np.sum(x_a, axis=1) / params["M"], x_a
 
 
 def etkf_sqrt_run(r2_mat, params):
@@ -213,7 +213,7 @@ def etkf_sqrt_run(r2_mat, params):
     filename = "%s/ETKF_SQRT" %params["etkf_sqrt_dir"]
     for step in range(params["T"]):
         tick = time.time()
-        t_simul, e_loc[:, step + 1] = _etkf_sqrt_step(params, r2_mat, x_a, step)
+        t_simul, e_loc[:, step + 1], x_a = _etkf_sqrt_step(params, r2_mat, x_a, step)
         tack = time.time()
         total_time += tack - tick
         _logline(filename, params, step, total_time)
@@ -245,7 +245,7 @@ def _etkf_sqrt_step(params, r2_mat, x_a, step):
         x_a = xap + m_a
     else:
         x_a = x_f
-    return t_simul, np.sum(x_a, axis=1) / params["M"]
+    return t_simul, np.sum(x_a, axis=1) / params["M"], x_a
 
 
 def _get_xstar(params):
