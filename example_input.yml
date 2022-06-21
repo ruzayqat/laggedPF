@@ -1,11 +1,11 @@
-ncores: 20 #number of processors available on the machine
-nsimu: 20 #must be a multiple of ncores
+ncores: 50 #number of processors available on the machine
+nsimu: 50 #must be a multiple of ncores
 L: 1 #the lag is L+1
 M: 1000 #number of ensembles in ensemble mehtods
 MCMCnmax: 15 #num of maximum MCMC steps inside SMC sampler
 MCMCnmin: 10 #num of minimum MCMC steps inside SMC sampler
 N: 100 #number of particles
-ESS_t: 0.7 #Threshold on effective sample size
+ESS_t: 0.5 #Threshold on effective sample size
 T: 10 #stop simulations after T time steps
 C_is_eye: false #is matrix C the identity?
 X_CoefMatrix_is_eye: true #is matrix R1^{1/2} the identity?
