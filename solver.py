@@ -187,7 +187,7 @@ class ShallowWaterSolver():
 SOLVER = None
 def _init_solver(params):
     global SOLVER
-    SOLVER = ShallowWaterSolver(params["dim"])
+    SOLVER = ShallowWaterSolver(params["d"])
     SOLVER.set_dx(params["dx"])
     SOLVER.set_cfl(params["c"])
 

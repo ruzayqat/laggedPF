@@ -28,7 +28,7 @@ def get_params(input_file):
         params = yaml.safe_load(fin)
     params['N'] = int(params['N'])
     params['M'] = int(params['M'])
-    params['dim'] = params['d'] + 2
+    params['dim'] = params['d'] 
     params['dim2'] = params['dim'] ** 2
     params['dimx'] = 3 * params['dim2']
     params['no_h'] = (params['dim'] // params['h_freq']) ** 2
