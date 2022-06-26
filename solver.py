@@ -26,10 +26,16 @@ class ShallowWaterSolver():
         dim2 = dim*dim
         for i in range(3):
             self.solution[i, 1:-1, 1:-1] = sol_prev[i*dim2:(i+1)*dim2].reshape(dim, dim)
-            self.solution[i, 0, :] = self.solution[i, 1, :]
-            self.solution[i, :, 0] = self.solution[i, :, 1]
-            self.solution[i, -1, :] = self.solution[i, -2, :]
-            self.solution[i, :, -1] = self.solution[i, :, -2]
+            alpha = 1
+            beta = 1
+            if i == 1:
+                alpha = -1
+            if i == 2:
+                beta = -1
+            self.solution[i, :, -1] = alpha*self.solution[i, :, -2]
+            self.solution[i, :, 0] = alpha*self.solution[i, :, 1]
+            self.solution[i, -1, :] = beta*self.solution[i, -2, :]
+            self.solution[i, 0, :] = beta*self.solution[i, 1, :]
 
     def set_dx(self, step):
         """Set space step"""
