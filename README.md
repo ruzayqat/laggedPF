@@ -12,12 +12,15 @@ The python code provided in this repository requires the following packages:
 - h5py
 - scipy
 - numba
-- jax (in case of usage of GPU for matrix operations)
+- jax (in case of usage of GPU for matrix operations).
+
 
 ## Usage
 
+If you have jax and wouild like to run on GPU, you need to edit the `mat_mul` function in `tools.py` module by commenting out the line corresponding to that.
+
 Prior to running any given filter, one should provide the data and eventually the predictor
-statistics. This is done through executing the driver script `gnerate_pred_using_EnKF.py`.
+statistics (for the function "mu" in the paper). This is done through executing the driver script `gnerate_pred_using_EnKF.py`.
 
 4 executable driver scripts are provided:
 
