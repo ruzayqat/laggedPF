@@ -17,7 +17,7 @@ The python code provided in this repository requires the following packages:
 
 ## Usage
 
-If you have jax and wouild like to run on GPU, you need to edit the `mat_mul` function in `tools.py` module by commenting out the line corresponding to that.
+If you have jax and would like to run on GPU, you need to edit the `mat_mul` function in `tools.py` module by commenting out the line corresponding to that.
 
 Prior to running any given filter, one should provide the data and eventually the predictor
 statistics (for the function "mu" in the paper). This is done through executing the driver script `gnerate_pred_using_EnKF.py`.
