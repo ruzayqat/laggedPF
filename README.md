@@ -1,7 +1,7 @@
 # A LAGGED PARTICLE FILTER FOR STABLE FILTERING OF CERTAIN HIGH-DIMENSIONAL STATE-SPACE MODEL
 
 ## About
-This repository contains the modules used in the *SJUQ* submission  **A LAGGED PARTICLE FILTER FOR STABLE FILTERING OF 
+This repository contains the modules used in generating the graphs of the shallow-water model in the *SJUQ* article  **A LAGGED PARTICLE FILTER FOR STABLE FILTERING OF 
 CERTAIN HIGH-DIMENSIONAL STATE-SPACE MODEL** which can be found on this link https://arxiv.org/pdf/2110.00884, and consists of the application of the lagged particle filtering technique on the non-linear shallow-water equation. For help regarding this code or the MATLAB codes that are used for the other models, please contact the first author on his email found in the article. 
 
 ## Requirements
@@ -37,4 +37,4 @@ input_file = <my_input_file.yml>
 
 ## Plotting
 
-To plot the results simply run the MATLAB code `read_h5.m`.
+To plot the results simply run the MATLAB code `read_h5.m`. Currently this file generates comparisons between the Lagged PF and EnKF. You can edit the file easily to generate plots for the other supported ensemble methods, namely ETKF and ETKF-SQRT but first you have to run the files `run_etkf.py` and `run_etkf_sqrt.py`.
