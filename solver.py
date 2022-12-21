@@ -56,13 +56,13 @@ class ShallowWaterSolver():
 
         self.fluxes["lam_u"] = 0.5*np.abs(self.solution[1, :, :] +
                                           self.solution[1, :, self.shift["m1"]]) +\
-                               np.sqrt(self.solution[0, :, :] +
-                                       self.solution[0, :, self.shift["m1"]] * grav)
+                               np.sqrt((self.solution[0, :, :] +
+                                       self.solution[0, :, self.shift["m1"]]) * grav)
 
         self.fluxes["lam_v"] = 0.5*np.abs(self.solution[2, :, :] +
                                           self.solution[2, self.shift["m1"], :]) +\
-                               np.sqrt(self.solution[0, :, :] +
-                                       self.solution[0, self.shift["m1"], :] * grav)
+                               np.sqrt((self.solution[0, :, :] +
+                                       self.solution[0, self.shift["m1"], :]) * grav)
         norm = -1e16
         for key in ["lam_u", "lam_v"]:
             norm = max(norm, self.fluxes[key].sum(axis=1).max())
