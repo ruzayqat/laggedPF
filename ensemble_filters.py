@@ -10,7 +10,7 @@ from scipy.sparse import diags
 from tools import (mat_mul, mvnrnd, fwd_slash, symmetric)
 from solver import solve
 from parameters import get_params
-from data_tools import get_data
+from data_tools import (get_data, sample_from_f)
 
 def _initialize(params):
     initial = _get_xstar(params)
@@ -113,14 +113,14 @@ def enkf_run(r2_sqrt, params):
     for step in range(params["T"]):
         tick = time.time()
         t_simul, e_loc[:, step + 1], x_a = _enkf_step(params, r2_mat, r2_sqrt, x_a,
-                                                 step)
+                                                 step, t_simul)
         tack = time.time()
         total_time += tack - tick
         _logline(filename, params, step, total_time)
     return t_simul, e_loc
 
-def _enkf_step(params, r2_mat, r2_sqrt, x_a, step):
-    t_simul, x_f = solve(params['M'], x_a, params)
+def _enkf_step(params, r2_mat, r2_sqrt, x_a, step, t_simul):
+    t_simul, x_f, _ = sample_from_f(params['M'], params['M'], x_a, t_simul, params)
     if (step + 1) % params['t_freq'] == 0:
         data = get_data(params, step)
         pred_mean = np.sum(x_f, axis=1) / params['M']
@@ -167,15 +167,15 @@ def etkf_run(r2_sqrt_inv, params):
     filename = "%s/ETKF" %params["etkf_dir"]
     for step in range(params["T"]):
         tick = time.time()
-        t_simul, e_loc[:, step + 1], x_a = _etkf_step(params, r2_sqrt_inv, x_a, step)
+        t_simul, e_loc[:, step + 1], x_a = _etkf_step(params, r2_sqrt_inv, x_a, step, t_simul)
         tack = time.time()
         total_time += tack - tick
         _logline(filename, params, step, total_time)
     return t_simul, e_loc
 
 
-def _etkf_step(params, r2_sqrt_inv, x_a, step):
-    t_simul, x_f = solve(params["M"], x_a, params)
+def _etkf_step(params, r2_sqrt_inv, x_a, step, t_simul):
+    t_simul, x_f, _ = sample_from_f(params['M'], params['M'], x_a, t_simul, params)
 
     if (step + 1) % params['t_freq'] == 0:
         data = get_data(params, step)
@@ -213,15 +213,15 @@ def etkf_sqrt_run(r2_mat, params):
     filename = "%s/ETKF_SQRT" %params["etkf_sqrt_dir"]
     for step in range(params["T"]):
         tick = time.time()
-        t_simul, e_loc[:, step + 1], x_a = _etkf_sqrt_step(params, r2_mat, x_a, step)
+        t_simul, e_loc[:, step + 1], x_a = _etkf_sqrt_step(params, r2_mat, x_a, step, t_simul)
         tack = time.time()
         total_time += tack - tick
         _logline(filename, params, step, total_time)
     return t_simul, e_loc
 
-def _etkf_sqrt_step(params, r2_mat, x_a, step):
+def _etkf_sqrt_step(params, r2_mat, x_a, step, t_simul):
     # pylint: disable-msg=too-many-locals
-    t_simul, x_f = solve(params["M"], x_a, params)
+    t_simul, x_f, _ = sample_from_f(params['M'], params['M'], x_a, t_simul, params)
 
     if (step + 1) % params['t_freq'] == 0:
         data = get_data(params, step)
